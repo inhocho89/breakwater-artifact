@@ -1,0 +1,3 @@
+[submodule "shenango"]
+	path = shenango
+	url = https://github.com/abelay/shenango
