@@ -28,18 +28,21 @@ for agent in AGENTS:
 print("Distributing sources...")
 repo_name = (os.getcwd().split('/'))[-1]
 # - server
-cmd = "scp -P 22 -i {} -o StrictHostKeyChecking=no -r ../{}"\
+cmd = "rsync -azh -e \"ssh -i {} -o StrictHostKeyChecking=no"\
+        " -o UserKnownHostsFile=/dev/null\" --progress ../{}/"\
         " {}@{}:~/{} >/dev/null"\
         .format(KEY_LOCATION, repo_name, USERNAME, SERVER, ARTIFACT_PATH)
-execute_local(cmd);
+execute_local(cmd)
 # - client
-cmd = "scp -P 22 -i {} -o StrictHostKeyChecking=no -r ../{}"\
+cmd = "rsync -azh -e \"ssh -i {} -o StrictHostKeyChecking=no"\
+        " -o UserKnownHostsFile=/dev/null\" --progress ../{}/"\
         " {}@{}:~/{} >/dev/null"\
         .format(KEY_LOCATION, repo_name, USERNAME, CLIENT, ARTIFACT_PATH)
 execute_local(cmd)
 # - agents
 for agent in AGENTS:
-    cmd = "scp -P 22 -i {} -o StrictHostKeyChecking=no -r ../{}"\
+    cmd = "rsync -azh -e \"ssh -i {} -o StrictHostKeyChecking=no"\
+            " -o UserKnownHostsFile=/dev/null\" --progress ../{}/"\
             " {}@{}:~/{} >/dev/null"\
             .format(KEY_LOCATION, repo_name, USERNAME, agent, ARTIFACT_PATH)
     execute_local(cmd)
