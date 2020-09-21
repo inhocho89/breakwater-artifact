@@ -4,3 +4,7 @@
 [submodule "shenango-memcached"]
 	path = shenango-memcached
 	url = https://github.com/joshuafried/shenango-memcached
+[submodule "memcached-client"]
+	path = memcached-client
+	url = https://github.com/inhocho89/memcached-client
+	branch = master
