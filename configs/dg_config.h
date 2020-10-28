@@ -6,24 +6,25 @@
 
 /* Recommended parameters with 1,000 clinets
 *  in XL170 environment
+* - Memcached : 25
 * - 1 us average service time
 * (bimod) #define DAGOR_OVERLOAD_THRESH		20
 * (exp) #define DAGOR_OVERLOAD_THRESH		30
 * (const) #define DAGOR_OVERLOAD_THRESH		30
 *
 * - 10 us average service time
-* (bimod) #define DAGOR_OVERLOAD_THRESH		100
-* (exp) #define DAGOR_OVERLOAD_THRESH		100
-* (const) #define DAGOR_OVERLOAD_THRESH		100
+* (bimod) #define DAGOR_OVERLOAD_THRESH		80
+* (exp) #define DAGOR_OVERLOAD_THRESH		70
+* (const) #define DAGOR_OVERLOAD_THRESH		60
 *
 * - 100 us average service time
-* (bimod) #define DAGOR_OVERLOAD_THRESH		820
-* (exp) #define DAGOR_OVERLOAD_THRESH		820
-* (const) #define DAGOR_OVERLOAD_THRESH		820
+* (bimod) #define DAGOR_OVERLOAD_THRESH		500
+* (exp) #define DAGOR_OVERLOAD_THRESH		500
+* (const) #define DAGOR_OVERLOAD_THRESH		500
 */
 
 /* delay threshold to detect congestion */
-#define DAGOR_OVERLOAD_THRESH	100	// in us
+#define DAGOR_OVERLOAD_THRESH	70	// in us
 /* max priority update interval */
 #define DAGOR_PRIO_UPDATE_INT	1000	// in us
 /* max # requests for priority update */
