@@ -179,7 +179,7 @@ execute_remote([client_conn] + agent_conns, cmd, True)
 # Execute IOKernel
 iok_sessions = []
 print("Executing IOKernel...")
-cmd = "cd ~/{}/shenango && sudo ./iokerneld no_hw_qdel".format(ARTIFACT_PATH)
+cmd = "cd ~/{}/shenango && sudo ./iokerneld".format(ARTIFACT_PATH)
 iok_sessions += execute_remote([server_conn, client_conn] + agent_conns,
                                cmd, False)
 
