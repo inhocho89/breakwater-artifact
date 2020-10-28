@@ -69,4 +69,10 @@ cmd = "cd ~/{}/shenango/breakwater && make clean && make &&"\
         " make -C bindings/cc".format(ARTIFACT_PATH)
 execute_remote([server_conn, client_conn] + agent_conns, cmd, True)
 
+print("Setting up memcahced...")
+cmd = "cd ~/{}/shenango-memcached && ./version.sh && autoreconf -i"\
+        " && ./configure --with-shenango=../shenango"\
+        .format(ARTIFACT_PATH)
+execute_remote([server_conn], cmd, True)
+
 print("Done.")

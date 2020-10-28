@@ -29,7 +29,10 @@ ST_DIST = "exp"
 OFFERED_LOADS = [100000, 200000, 300000, 400000, 500000, 600000, 700000, 800000, 900000,
                  1000000, 1100000, 1200000, 1400000, 1600000]
 
+
 ENABLE_DIRECTPATH = True
+SPIN_SERVER = True
+DISABLE_WATCHDOG = False
 
 NUM_CORES_SERVER = 10
 NUM_CORES_CLIENT = 16
@@ -55,7 +58,8 @@ cmd = "sed -i \'s/#define SBW_RTT_US.*/#define SBW_RTT_US\\t\\t\\t{:d}/g\'"\
 execute_local(cmd)
 
 ### Function definitions ###
-def generate_shenango_config(is_server ,conn, ip, netmask, gateway, num_cores, directpath):
+def generate_shenango_config(is_server ,conn, ip, netmask, gateway, num_cores,
+        directpath, spin, disable_watchdog):
     config_name = ""
     config_string = ""
     if is_server:
@@ -69,11 +73,16 @@ def generate_shenango_config(is_server ,conn, ip, netmask, gateway, num_cores, d
         config_string = "host_addr {}".format(ip)\
                       + "\nhost_netmask {}".format(netmask)\
                       + "\nhost_gateway {}".format(gateway)\
-                      + "\nruntime_kthreads {:d}".format(num_cores)\
-                      + "\nruntime_spinning_kthreads {:d}".format(num_cores)
+                      + "\nruntime_kthreads {:d}".format(num_cores)
+
+    if spin:
+        config_string += "\nruntime_spinning_kthreads {:d}".format(num_cores)
 
     if directpath:
         config_string += "\nenable_directpath 1"
+
+    if disable_watchdog:
+        config_string += "\ndisable_watchdog 1"
 
     cmd = "cd ~/{} && echo \"{}\" > {} "\
             .format(ARTIFACT_PATH,config_string, config_name)
@@ -146,12 +155,12 @@ for agent in AGENTS:
 # Generating config files
 print("Generating config files...")
 generate_shenango_config(True, server_conn, server_ip, netmask, gateway,
-                         NUM_CORES_SERVER, ENABLE_DIRECTPATH)
+                         NUM_CORES_SERVER, ENABLE_DIRECTPATH, SPIN_SERVER, DISABLE_WATCHDOG)
 generate_shenango_config(False, client_conn, client_ip, netmask, gateway,
-                         NUM_CORES_CLIENT, ENABLE_DIRECTPATH)
+                         NUM_CORES_CLIENT, ENABLE_DIRECTPATH, True, False)
 for i in range(NUM_AGENT):
     generate_shenango_config(False, agent_conns[i], agent_ips[i], netmask,
-                             gateway, NUM_CORES_CLIENT, ENABLE_DIRECTPATH)
+                             gateway, NUM_CORES_CLIENT, ENABLE_DIRECTPATH, True, False)
 
 # Rebuild Shanango
 print("Building Shenango...")
@@ -177,7 +186,7 @@ execute_remote([server_conn, client_conn] + agent_conns,
 # Execute IOKernel
 iok_sessions = []
 print("Executing IOKernel...")
-cmd = "cd ~/{}/shenango && sudo ./iokerneld".format(ARTIFACT_PATH)
+cmd = "cd ~/{}/shenango && sudo ./iokerneld no_hw_qdel".format(ARTIFACT_PATH)
 iok_sessions += execute_remote([server_conn, client_conn] + agent_conns,
                                cmd, False)
 
@@ -252,7 +261,16 @@ cmd = "scp -P 22 -i {} -o StrictHostKeyChecking=no {}@{}:~/{}/output.csv ./"\
         " >/dev/null".format(KEY_LOCATION, USERNAME, CLIENT, ARTIFACT_PATH)
 execute_local(cmd)
 
-output_prefix = "{}_{}_{:d}_nconn_{:d}".format(OVERLOAD_ALG, ST_DIST, ST_AVG, NUM_CONNS)
+output_prefix = "{}".format(OVERLOAD_ALG)
+
+if SPIN_SERVER:
+    output_prefix += "_spin"
+
+if DISABLE_WATCHDOG:
+    output_prefix += "_nowd"
+
+output_prefix += "_{}_{:d}_nconn_{:d}".format(ST_DIST, ST_AVG, NUM_CONNS)
+
 # Print Headers
 header = "num_clients,offered_load,throughput,goodput,cpu,min,mean,p50,p90,p99,p999,p9999"\
         ",max,reject_min_del,reject_mean_del,reject_p50_del,reject_p99_del,p1_win,mean_win"\
