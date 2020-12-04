@@ -1,8 +1,8 @@
 diff --git a/inc/iokernel/control.h b/inc/iokernel/control.h
-index d057e06..a39a36e 100644
+index 637eb97..7e54188 100644
 --- a/inc/iokernel/control.h
 +++ b/inc/iokernel/control.h
-@@ -42,6 +42,7 @@ struct congestion_info {
+@@ -45,6 +45,7 @@ struct congestion_info {
  enum {
  	HWQ_INVALID = 0,
  	HWQ_MLX5,
@@ -23,10 +23,10 @@ index 8743bed..1eeb6b8 100644
  	if (!h->descriptor_table || !h->consumer_idx)
  		return -EINVAL;
 diff --git a/iokernel/defs.h b/iokernel/defs.h
-index 7ac71e0..75f5899 100644
+index 2e49cc0..dc9c36f 100644
 --- a/iokernel/defs.h
 +++ b/iokernel/defs.h
-@@ -55,6 +55,7 @@ struct proc;
+@@ -56,6 +56,7 @@ struct proc;
  
  struct hwq {
  	bool			enabled;
@@ -35,10 +35,10 @@ index 7ac71e0..75f5899 100644
  	uint32_t		*consumer_idx;
  	uint32_t		descriptor_log_size;
 diff --git a/iokernel/sched.c b/iokernel/sched.c
-index b9514f6..1037a87 100644
+index 78059f0..ce77e39 100644
 --- a/iokernel/sched.c
 +++ b/iokernel/sched.c
-@@ -257,7 +257,7 @@ static uint32_t hwq_find_head(struct hwq *h, uint32_t cur_tail, uint32_t last_he
+@@ -272,7 +272,7 @@ static uint64_t sched_measure_mlx5_delay(struct hwq *h)
  }
  
  static bool
@@ -47,7 +47,7 @@ index b9514f6..1037a87 100644
  			     bool update_pointers)
  {
  	uint32_t cur_tail, cur_head, last_head, last_tail;
-@@ -287,8 +287,8 @@ sched_measure_hardware_delay(struct thread *th, struct hwq *h,
+@@ -302,8 +302,8 @@ sched_measure_hardware_delay(struct thread *th, struct hwq *h,
  	if (cur_tail != last_tail || h->busy_since == UINT64_MAX)
  		h->busy_since = cur_tsc;
  
@@ -58,7 +58,7 @@ index b9514f6..1037a87 100644
  }
  
  static uint64_t calc_delay_tsc(uint64_t tsc)
-@@ -297,7 +297,7 @@ static uint64_t calc_delay_tsc(uint64_t tsc)
+@@ -312,7 +312,7 @@ static uint64_t calc_delay_tsc(uint64_t tsc)
  }
  
  static bool
@@ -67,14 +67,17 @@ index b9514f6..1037a87 100644
  			    uint64_t *rxq_tsc, uint64_t *uthread_tsc,
  			    uint64_t *storage_tsc, uint64_t *timer_tsc)
  {
-@@ -358,12 +358,12 @@ sched_measure_kthread_delay(struct thread *th,
+@@ -373,7 +373,7 @@ sched_measure_kthread_delay(struct thread *th,
  	*timer_tsc = calc_delay_tsc(tmp);
  
  	/* DIRECTPATH: measure delay and update signals */
 -	if (sched_measure_hardware_delay(th, &th->directpath_hwq, true))
 +	if (sched_measure_hardware_delay(p, th, &th->directpath_hwq, true))
  		busy = true;
- 	*rxq_tsc = MAX(*rxq_tsc, calc_delay_tsc(th->directpath_hwq.busy_since));
+ 
+ 	// TODO: use sched_measure_mlx5_delay() instead of scanning the descriptor
+@@ -385,7 +385,7 @@ sched_measure_kthread_delay(struct thread *th,
+ 		*rxq_tsc = MAX(*rxq_tsc, calc_delay_tsc(th->directpath_hwq.busy_since));
  
  	/* STORAGE: measure delay and update signals */
 -	if (sched_measure_hardware_delay(th, &th->storage_hwq, true))
@@ -82,16 +85,16 @@ index b9514f6..1037a87 100644
  		busy = true;
  	*storage_tsc = calc_delay_tsc(th->storage_hwq.busy_since);
  
-@@ -393,7 +393,7 @@ static void sched_measure_delay(struct proc *p)
+@@ -416,7 +416,7 @@ static void sched_measure_delay(struct proc *p)
  	for (i = 0; i < p->thread_count; i++) {
- 		uint64_t rxq_tsc, uthread_tsc, storage_tsc, timer_tsc;
+ 		uint64_t delay, rxq_tsc, uthread_tsc, storage_tsc, timer_tsc;
  
 -		busy |= sched_measure_kthread_delay(&p->threads[i],
 +		busy |= sched_measure_kthread_delay(p, &p->threads[i],
  			&rxq_tsc, &uthread_tsc, &storage_tsc, &timer_tsc);
- 		hdelay = MAX(rxq_tsc + uthread_tsc + storage_tsc + timer_tsc,
- 			     hdelay);
-@@ -421,7 +421,7 @@ static void sched_detect_io_for_idle_runtime(struct proc *p)
+ 		delay = rxq_tsc + uthread_tsc + storage_tsc + timer_tsc;
+ 		hdelay = MAX(delay, hdelay);
+@@ -445,7 +445,7 @@ static void sched_detect_io_for_idle_runtime(struct proc *p)
  	for (i = 0; i < p->thread_count; i++) {
  		th = &p->threads[i];
  
@@ -113,10 +116,10 @@ index 143f017..c801141 100644
  #else
  	log_err("cfg: cannot enable directpath, "
 diff --git a/runtime/defs.h b/runtime/defs.h
-index b4b322d..6083e9a 100644
+index 13c85e1..119d7f1 100644
 --- a/runtime/defs.h
 +++ b/runtime/defs.h
-@@ -548,6 +548,7 @@ struct net_driver_ops {
+@@ -549,6 +549,7 @@ struct net_driver_ops {
  	int (*register_flow)(unsigned int affininty, struct trans_entry *e, void **handle_out);
  	int (*deregister_flow)(struct trans_entry *e, void *handle);
  	uint32_t (*get_flow_affinity)(uint8_t ipproto, uint16_t local_port, struct netaddr remote);
@@ -124,7 +127,7 @@ index b4b322d..6083e9a 100644
  };
  
  extern struct net_driver_ops net_ops;
-@@ -555,11 +556,12 @@ extern struct net_driver_ops net_ops;
+@@ -556,11 +557,12 @@ extern struct net_driver_ops net_ops;
  #ifdef DIRECTPATH
  
  extern bool cfg_directpath_enabled;
@@ -139,10 +142,10 @@ index b4b322d..6083e9a 100644
  
  extern size_t directpath_rx_buf_pool_sz(unsigned int nrqs);
 diff --git a/runtime/net/core.c b/runtime/net/core.c
-index 3dc2598..bfb1747 100644
+index 60b70e8..18fe32d 100644
 --- a/runtime/net/core.c
 +++ b/runtime/net/core.c
-@@ -610,6 +610,11 @@ static int deregister_flow_iokernel(struct trans_entry *e, void *handle)
+@@ -607,6 +607,11 @@ static int deregister_flow_iokernel(struct trans_entry *e, void *handle)
  	return 0;
  }
  
@@ -154,7 +157,7 @@ index 3dc2598..bfb1747 100644
  static struct net_driver_ops iokernel_ops = {
  	.rx_batch = rx_batch_iokernel,
  	.tx_single = net_tx_iokernel,
-@@ -617,6 +622,7 @@ static struct net_driver_ops iokernel_ops = {
+@@ -614,6 +619,7 @@ static struct net_driver_ops iokernel_ops = {
  	.register_flow =  register_flow_iokernel,
  	.deregister_flow = deregister_flow_iokernel,
  	.get_flow_affinity = compute_flow_affinity,
@@ -163,19 +166,18 @@ index 3dc2598..bfb1747 100644
  
  /**
 diff --git a/runtime/net/directpath/common.c b/runtime/net/directpath/common.c
-index 0beaa40..a4e0bc2 100644
+index 9570f3b..ce17d70 100644
 --- a/runtime/net/directpath/common.c
 +++ b/runtime/net/directpath/common.c
-@@ -2,7 +2,7 @@
+@@ -2,6 +2,7 @@
  #include <base/kref.h>
  #include <base/mempool.h>
  #include <runtime/sync.h>
--
 +#include <base/log.h>
+ 
  #include "defs.h"
  
- #ifdef DIRECTPATH
-@@ -15,6 +15,14 @@ struct tcache *directpath_buf_tcache;
+@@ -15,6 +16,14 @@ struct tcache *directpath_buf_tcache;
  DEFINE_PERTHREAD(struct tcache_perthread, directpath_buf_pt);
  
  bool cfg_directpath_enabled;
@@ -190,11 +192,10 @@ index 0beaa40..a4e0bc2 100644
  
  size_t directpath_rx_buf_pool_sz(unsigned int nrqs)
  {
-@@ -65,12 +73,27 @@ int directpath_init(void)
- 	if (ret)
+@@ -66,12 +75,27 @@ int directpath_init(void)
  		return ret;
  
--	/* initialize mlx5 */
+ 	/* initialize mlx5 */
 -	ret = mlx5_init(rxq_out, txq_out, maxks, maxks);
 -	if (ret)
 -		return ret;
@@ -217,13 +218,13 @@ index 0beaa40..a4e0bc2 100644
 +		}
 +	}
 +
-+	log_err("Could not intialize directpath, ret = %d", ret);
-+
-+	return ret ? ret : -EINVAL;
++	log_err("Could not initialize directpath, ret = %d", ret);
  
++	return ret ? ret : -EINVAL;
  }
  
-@@ -92,7 +115,7 @@ int directpath_init_thread(void)
+ int directpath_init_thread(void)
+@@ -92,7 +116,7 @@ int directpath_init_thread(void)
  		rxq->descriptor_table, (1 << hs->descriptor_log_size) * hs->nr_descriptors);
  	hs->parity_byte_offset = rxq->parity_byte_offset;
  	hs->parity_bit_mask = rxq->parity_bit_mask;
@@ -233,23 +234,24 @@ index 0beaa40..a4e0bc2 100644
  
  	k->directpath_rxq = rxq;
 diff --git a/runtime/net/directpath/defs.h b/runtime/net/directpath/defs.h
-index 0074ff7..82175bc 100644
+index 0074ff7..00f6166 100644
 --- a/runtime/net/directpath/defs.h
 +++ b/runtime/net/directpath/defs.h
-@@ -21,6 +21,7 @@ extern struct mempool directpath_buf_mp;
+@@ -21,6 +21,9 @@ extern struct mempool directpath_buf_mp;
  extern struct tcache *directpath_buf_tcache;
  extern DEFINE_PERTHREAD(struct tcache_perthread, directpath_buf_pt);
  extern void directpath_rx_completion(struct mbuf *m);
 -extern int mlx5_init(struct hardware_q **rxq_out,
 -	    struct direct_txq **txq_out, unsigned int nr_rxq,
 -	    unsigned int nr_txq);
-+extern int mlx5_init_queue_steering(struct hardware_q **rxq_out,struct direct_txq **txq_out,
-+	             unsigned int nr_rxq, unsigned int nr_txq);
-+extern int mlx5_init_flow_steering(struct hardware_q **rxq_out,struct direct_txq **txq_out,
-+	             unsigned int nr_rxq, unsigned int nr_txq);
-\ No newline at end of file
++extern int mlx5_init_queue_steering(struct hardware_q **rxq_out,
++			struct direct_txq **txq_out, unsigned int nr_rxq,
++			unsigned int nr_txq);
++extern int mlx5_init_flow_steering(struct hardware_q **rxq_out,
++			struct direct_txq **txq_out, unsigned int nr_rxq,
++			unsigned int nr_txq);
 diff --git a/runtime/net/directpath/mlx5/mlx5.h b/runtime/net/directpath/mlx5/mlx5.h
-index 15cba2a..84a78b6 100644
+index 15cba2a..2a3e16e 100644
 --- a/runtime/net/directpath/mlx5/mlx5.h
 +++ b/runtime/net/directpath/mlx5/mlx5.h
 @@ -10,11 +10,18 @@
@@ -271,7 +273,7 @@ index 15cba2a..84a78b6 100644
  	uint32_t consumer_idx;
  
  	struct mlx5dv_cq rx_cq_dv;
-@@ -56,14 +63,12 @@ struct mlx5_txq {
+@@ -56,14 +63,13 @@ struct mlx5_txq {
  
  extern struct mlx5_rxq rxqs[NCPU];
  extern struct ibv_context *context;
@@ -285,11 +287,12 @@ index 15cba2a..84a78b6 100644
 -extern uint32_t mlx5_get_flow_affinity(uint8_t ipproto,
 -			 uint16_t local_port, struct netaddr remote);
 +extern int mlx5_common_init(struct hardware_q **rxq_out, struct direct_txq **txq_out,
-+	             unsigned int nr_rxq, unsigned int nr_txq, bool use_rss);
++			unsigned int nr_rxq, unsigned int nr_txq, bool use_rss);
++
  
  static inline unsigned int nr_inflight_tx(struct mlx5_txq *v)
  {
-@@ -109,7 +114,3 @@ static inline uint32_t mlx5_get_rss_result(struct mlx5_cqe64 *cqe)
+@@ -109,7 +115,3 @@ static inline uint32_t mlx5_get_rss_result(struct mlx5_cqe64 *cqe)
  {
  	return ntoh32(*((uint32_t *)cqe + 3));
  }
@@ -390,7 +393,7 @@ index 3b0b644..1d08aa3 100644
 +
  #endif
 diff --git a/runtime/net/directpath/mlx5/mlx5_init.c b/runtime/net/directpath/mlx5/mlx5_init.c
-index 0e77a19..e344f3f 100644
+index 0e77a19..b11f2f0 100644
 --- a/runtime/net/directpath/mlx5/mlx5_init.c
 +++ b/runtime/net/directpath/mlx5/mlx5_init.c
 @@ -22,8 +22,6 @@
@@ -407,7 +410,7 @@ index 0e77a19..e344f3f 100644
  	ctrl = segment;
  	eseg = segment + sizeof(*ctrl);
 -	dpseg = (void *)eseg + (offsetof(struct mlx5_wqe_eth_seg, inline_hdr) & ~0xf);
-+	dpseg = (void *)eseg + ((offsetof(struct mlx5_wqe_eth_seg, inline_hdr) + MLX5_ETH_L2_INLINE_HEADER_SIZE) & ~0xf);
++	dpseg = (void *)eseg + ((offsetof(struct mlx5_wqe_eth_seg, inline_hdr) + MLX5_ETH_L2_INLINE_HEADER_SIZE ) & ~0xf);
  
  	size = (sizeof(*ctrl) / 16) +
 -	       (offsetof(struct mlx5_wqe_eth_seg, inline_hdr)) / 16 +
@@ -415,16 +418,15 @@ index 0e77a19..e344f3f 100644
  	       sizeof(struct mlx5_wqe_data_seg) / 16;
  
  	/* set ctrl segment */
-@@ -58,6 +56,8 @@ static void mlx5_init_tx_segment(struct mlx5_txq *v, unsigned int idx)
+@@ -58,6 +56,7 @@ static void mlx5_init_tx_segment(struct mlx5_txq *v, unsigned int idx)
  	/* set eseg */
  	memset(eseg, 0, sizeof(struct mlx5_wqe_eth_seg));
  	eseg->cs_flags |= MLX5_ETH_WQE_L3_CSUM | MLX5_ETH_WQE_L4_CSUM;
 +	eseg->inline_hdr_sz = htobe16(MLX5_ETH_L2_INLINE_HEADER_SIZE);
-+
  
  	/* set dpseg */
  	dpseg->lkey = htobe32(mr_tx->lkey);
-@@ -78,7 +78,7 @@ static struct mlx5dv_ctx_allocators dv_allocators = {
+@@ -78,7 +77,7 @@ static struct mlx5dv_ctx_allocators dv_allocators = {
  	.free = simple_free,
  };
  
@@ -433,7 +435,7 @@ index 0e77a19..e344f3f 100644
  {
  	int i, ret;
  	unsigned char *buf;
-@@ -127,32 +127,35 @@ static int mlx5_create_rxq(int index, struct mlx5_rxq *v)
+@@ -127,32 +126,35 @@ static int mlx5_create_rxq(int index, struct mlx5_rxq *v)
  	if (ret)
  		return -ret;
  
@@ -495,7 +497,7 @@ index 0e77a19..e344f3f 100644
  
  	/* expose direct verbs objects */
  	struct mlx5dv_obj obj = {
-@@ -244,7 +247,7 @@ static int mlx5_init_txq(int index, struct mlx5_txq *v)
+@@ -244,7 +246,7 @@ static int mlx5_init_txq(int index, struct mlx5_txq *v)
  			.max_send_wr = SQ_NUM_DESC,
  			.max_recv_wr = 0,
  			.max_send_sge = 1,
@@ -504,7 +506,7 @@ index 0e77a19..e344f3f 100644
  		},
  		.qp_type = IBV_QPT_RAW_PACKET,
  		.sq_sig_all = 1,
-@@ -262,7 +265,7 @@ static int mlx5_init_txq(int index, struct mlx5_txq *v)
+@@ -262,7 +264,7 @@ static int mlx5_init_txq(int index, struct mlx5_txq *v)
  	struct ibv_qp_attr qp_attr;
  	memset(&qp_attr, 0, sizeof(qp_attr));
  	qp_attr.qp_state = IBV_QPS_INIT;
@@ -513,7 +515,7 @@ index 0e77a19..e344f3f 100644
  	ret = ibv_modify_qp(v->tx_qp, &qp_attr, IBV_QP_STATE | IBV_QP_PORT);
  	if (ret)
  		return -ret;
-@@ -309,20 +312,11 @@ static int mlx5_init_txq(int index, struct mlx5_txq *v)
+@@ -309,20 +311,11 @@ static int mlx5_init_txq(int index, struct mlx5_txq *v)
  	return 0;
  }
  
@@ -536,7 +538,7 @@ index 0e77a19..e344f3f 100644
  {
  	int i, ret;
  
-@@ -351,7 +345,7 @@ int mlx5_init(struct hardware_q **rxq_out, struct direct_txq **txq_out,
+@@ -351,7 +344,7 @@ int mlx5_init(struct hardware_q **rxq_out, struct direct_txq **txq_out,
  		return -1;
  	}
  
@@ -545,7 +547,7 @@ index 0e77a19..e344f3f 100644
  	context = mlx5dv_open_device(ib_dev, &attr);
  	if (!context) {
  		log_err("mlx5_init: Couldn't get context for %s (errno %d)",
-@@ -388,17 +382,13 @@ int mlx5_init(struct hardware_q **rxq_out, struct direct_txq **txq_out,
+@@ -388,17 +381,13 @@ int mlx5_init(struct hardware_q **rxq_out, struct direct_txq **txq_out,
  	}
  
  	for (i = 0; i < nr_rxq; i++) {
@@ -564,7 +566,7 @@ index 0e77a19..e344f3f 100644
  	for (i = 0; i < nr_txq; i++) {
  		ret = mlx5_init_txq(i, &txqs[i]);
  		if (ret)
-@@ -407,8 +397,6 @@ int mlx5_init(struct hardware_q **rxq_out, struct direct_txq **txq_out,
+@@ -407,8 +396,6 @@ int mlx5_init(struct hardware_q **rxq_out, struct direct_txq **txq_out,
  		txq_out[i] = &txqs[i].txq;
  	}
  
@@ -575,11 +577,10 @@ index 0e77a19..e344f3f 100644
  
 diff --git a/runtime/net/directpath/mlx5/mlx5_queue_steering.c b/runtime/net/directpath/mlx5/mlx5_queue_steering.c
 new file mode 100644
-index 0000000..17fcea6
+index 0000000..0dad823
 --- /dev/null
 +++ b/runtime/net/directpath/mlx5/mlx5_queue_steering.c
-@@ -0,0 +1,270 @@
-+
+@@ -0,0 +1,269 @@
 +#ifdef DIRECTPATH
 +
 +#include <util/mmio.h>
