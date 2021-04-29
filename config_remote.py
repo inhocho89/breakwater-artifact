@@ -23,6 +23,6 @@ NET_RTT = 10
 ### End of config ###
 
 ARTIFACT_PATH = ARTIFACT_PARENT
-if ARTIFACT_PATH is not "":
+if ARTIFACT_PATH != "":
     ARTIFACT_PATH += "/"
 ARTIFACT_PATH += "bw_artif"

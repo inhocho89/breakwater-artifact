@@ -41,7 +41,7 @@ if OVERLOAD_ALG not in ["breakwater", "seda", "dagor", "nocontrol"]:
     print("Unknown overload algorithm: " + OVERLOAD_ALG)
     exit()
 
-cmd = "sed -i \'s/#define SBW_RTT_US.*/#define SBW_RTT_US\\t\\t\\t{:d}/g\'"\
+cmd = "sed -i'.orig' -e \'s/#define SBW_RTT_US.*/#define SBW_RTT_US\\t\\t\\t{:d}/g\'"\
         " configs/bw_config.h".format(NET_RTT)
 execute_local(cmd)
 
@@ -282,11 +282,11 @@ output_prefix += "_memcached_nconn_{:d}".format(NUM_CONNS)
 
 # Print Headers
 header = "num_clients,offered_load,throughput,goodput,cpu,min,mean,p50,p90,p99,p999,p9999"\
-        ",max,p1_win,mean_win,p99_win,p1_q,mean_q,p99_q,server:rx_pps"\
+        ",max,lmin,lmean,lp50,lp90,lp99,lp999,lp9999,lmax,p1_win,mean_win,p99_win,p1_q,mean_q,p99_q,server:rx_pps"\
         ",server:tx_pps,server:rx_bps,server:tx_bps,server:rx_drops_pps,server:rx_ooo_pps"\
         ",server:winu_rx_pps,server:winu_tx_pps,server:win_tx_wps,server:req_rx_pps"\
-        ",server:req_drop_rate,server:resp_tx_pps,client:min_tput,client:max_tput"\
-        ",client:winu_rx_pps,client:resp_rx_pps,client:req_tx_pps"\
+        ",server:resp_tx_pps,client:min_tput,client:max_tput"\
+        ",client:winu_rx_pps,client:winu_tx_pps,client:resp_rx_pps,client:req_tx_pps"\
         ",client:win_expired_wps,client:req_dropped_rps"
 cmd = "echo \"{}\" > outputs/{}.csv".format(header, output_prefix)
 execute_local(cmd)
