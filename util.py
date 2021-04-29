@@ -12,7 +12,7 @@ def execute_remote(conns, cmd, wait=True, must_succeed=True):
     if wait:
         for session in sessions:
             stderr = ""
-            if session.recv_exit_status() is not 0 and must_succeed:
+            if session.recv_exit_status() != 0 and must_succeed:
                 while session.recv_stderr_ready():
                     stderr += session.recv_stderr(BUF_SIZE).decode("utf-8")
                 print(stderr)
@@ -21,5 +21,5 @@ def execute_remote(conns, cmd, wait=True, must_succeed=True):
     return sessions
 
 def execute_local(cmd, must_succeed=True):
-    if system(cmd) is not 0 and must_succeed:
+    if system(cmd) != 0 and must_succeed:
         exit()
